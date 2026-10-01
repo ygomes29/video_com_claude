@@ -34,6 +34,9 @@ export default function ClipsPage() {
 
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deadlineRef = useRef<number>(0);
+  // Cancel flag: set to true on unmount / reset so an in-flight poll stops
+  // scheduling further ticks and stops touching state after navigation.
+  const cancelledRef = useRef(false);
 
   /* ---- substage cycling (representational, indeterminate) ---- */
   useEffect(() => {
@@ -54,6 +57,7 @@ export default function ClipsPage() {
   /* ---- polling loop ---- */
   const pollOnce = useCallback(
     async (id: string) => {
+      if (cancelledRef.current) return;
       if (Date.now() > deadlineRef.current) {
         stopPolling();
         setError("Tempo limite excedido ao processar o vídeo. Tente novamente.");
@@ -62,6 +66,8 @@ export default function ClipsPage() {
       }
       try {
         const res = await getClipStatus(id);
+        // Guard: navigation/cancel happened while we were awaiting.
+        if (cancelledRef.current) return;
         setStatus(res.status);
         if (res.status === "failed" || res.status === "cancelled") {
           stopPolling();
@@ -73,8 +79,10 @@ export default function ClipsPage() {
           stopPolling();
           try {
             const results = await getClipResults(id);
+            if (cancelledRef.current) return;
             setClips(results.clips);
           } catch (e) {
+            if (cancelledRef.current) return;
             setError((e as Error).message);
             setPhase("error");
             return;
@@ -85,6 +93,7 @@ export default function ClipsPage() {
         // still processing — schedule next poll
         pollTimerRef.current = setTimeout(() => pollOnce(id), POLL_INTERVAL_MS);
       } catch (e) {
+        if (cancelledRef.current) return;
         stopPolling();
         setError((e as Error).message);
         setPhase("error");
@@ -95,10 +104,15 @@ export default function ClipsPage() {
 
   useEffect(() => {
     if (phase !== "processing" || !jobId) return;
+    cancelledRef.current = false;
     deadlineRef.current = Date.now() + POLL_TIMEOUT_MS;
     setActiveSubstage(0);
     void pollOnce(jobId);
-    return stopPolling;
+    return () => {
+      // Stop everything on unmount / navigation / reset.
+      cancelledRef.current = true;
+      stopPolling();
+    };
   }, [phase, jobId, pollOnce, stopPolling]);
 
   /* ---- actions ---- */
@@ -133,6 +147,7 @@ export default function ClipsPage() {
   );
 
   const handleReset = useCallback(() => {
+    cancelledRef.current = true;
     stopPolling();
     setPhase("idle");
     setJobId(null);
