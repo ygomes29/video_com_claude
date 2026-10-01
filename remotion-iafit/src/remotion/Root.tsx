@@ -1,5 +1,6 @@
 import React from "react";
 import { Composition } from "remotion";
+import { ClipComposition } from "./clips/ClipComposition";
 import { DynamicComp } from "./DynamicComp";
 import { IafitVideo } from "./iafit/IafitVideo";
 import { IafitCaseStudy } from "./iafit2/IafitCaseStudy";
@@ -46,6 +47,19 @@ export const RemotionRoot: React.FC = () => {
         calculateMetadata={({ props }) => ({
           durationInFrames: props.durationInFrames as number,
           fps: props.fps as number,
+        })}
+      />
+      <Composition
+        id="ClipComposition"
+        component={ClipComposition}
+        durationInFrames={300}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{ clipUrl: "" }}
+        calculateMetadata={({ props }) => ({
+          durationInFrames: (props.durationInFrames as number) ?? 300,
+          fps: (props.fps as number) ?? 30,
         })}
       />
     </>

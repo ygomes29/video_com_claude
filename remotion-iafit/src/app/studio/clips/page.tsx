@@ -12,11 +12,7 @@ import {
 } from "@/lib/clipping/api-client";
 import { buildClipEditorSeed } from "@/remotion/clips/clipTemplate";
 import { storeClipForEdit } from "@/lib/clipping/clip-transfer";
-import {
-  POLL_INTERVAL_MS,
-  POLL_TIMEOUT_MS,
-  isTerminalStatus,
-} from "@/lib/clipping/polling";
+import { POLL_INTERVAL_MS, POLL_TIMEOUT_MS } from "@/lib/clipping/polling";
 import type { AspectRatio, Clip, ClipStatus } from "@/lib/clipping/types";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import Link from "next/link";

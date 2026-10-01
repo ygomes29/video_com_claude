@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { executeApi } from "../../../helpers/api-response";
+import { executeApi } from "../../../../helpers/api-response";
 import { submitClipJob } from "../../../../lib/clipping/muapi-client";
 import { normalizeClipStatus } from "../../../../lib/clipping/polling";
 import type { CreateClipResponse } from "../../../../lib/clipping/types";

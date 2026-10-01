@@ -54,7 +54,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
     if (!isStreaming || !monacoRef.current) return;
 
     const clearAllMarkers = () => {
-      monacoRef.current?.editor.getModels().forEach((model) => {
+      monacoRef.current?.editor.getModels().forEach((model: editor.ITextModel) => {
         monacoRef.current?.editor.setModelMarkers(model, "javascript", []);
         monacoRef.current?.editor.setModelMarkers(model, "typescript", []);
         monacoRef.current?.editor.setModelMarkers(model, "owner", []);
@@ -183,6 +183,14 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         export function interpolate(input: number, inputRange: number[], outputRange: number[], options?: any): number;
         export function spring(options: { frame: number; fps: number; config?: any; durationInFrames?: number }): number;
         export const Sequence: React.FC<{ from?: number; durationInFrames?: number; children: React.ReactNode }>;
+        export const Series: { Sequence: React.FC<{ durationInFrames: number; children: React.ReactNode }>; } & React.FC<{ children: React.ReactNode }>;
+        export const Img: React.FC<React.HTMLAttributes<HTMLImageElement> & { src?: string }>;
+        export const Video: React.FC<React.HTMLAttributes<HTMLVideoElement> & { src?: string; loop?: boolean; volume?: number; muted?: boolean }>;
+        export const OffthreadVideo: React.FC<React.HTMLAttributes<HTMLVideoElement> & { src?: string }>;
+        export const Audio: React.FC<{ src?: string; volume?: number; startFrom?: number; [key: string]: any }>;
+        export function staticFile(path: string): string;
+        export function random(seed: number | string): number;
+        export const Easing: { inOut(easing: (n: number) => number): (n: number) => number; linear: (n: number) => number; ease: (n: number) => number; quad: (n: number) => number; cubic: (n: number) => number; sin: (n: number) => number; circle: (n: number) => number; exp: (n: number) => number; bounce: (n: number) => number; };
       }`,
       "remotion.d.ts",
     );
@@ -242,7 +250,11 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
 
     // Override marker setting to suppress during streaming
     const originalSetModelMarkers = monaco.editor.setModelMarkers;
-    monaco.editor.setModelMarkers = (mdl, owner, markers) => {
+    monaco.editor.setModelMarkers = (
+      mdl: editor.ITextModel,
+      owner: string,
+      markers: editor.IMarkerData[],
+    ) => {
       if (isStreamingRef.current) {
         return;
       }

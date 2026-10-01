@@ -43,7 +43,6 @@ function clampScore(n: number): number {
   return Math.round(n);
 }
 
-let clipIdCounter = 0;
 /** Stable-ish id within a result set (jobId + index). */
 function makeClipId(jobId: string, index: number): string {
   return `${jobId}-${index}`;

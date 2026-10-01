@@ -16,7 +16,7 @@ export const POLL_INTERVAL_MS = 3000;
 export const POLL_TIMEOUT_MS = 10 * 60 * 1000;
 
 /** Terminal statuses — stop polling once reached. */
-export const TERMINAL_STATUSES: ReadonlySet<ClipStatus> = new Set([
+export const TERMINAL_STATUSES: ReadonlySet<ClipStatus> = new Set<ClipStatus>([
   "completed",
   "failed",
   "cancelled",

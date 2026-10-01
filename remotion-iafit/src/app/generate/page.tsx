@@ -19,6 +19,13 @@ import type {
   ErrorCorrectionContext,
 } from "../../types/conversation";
 import type { GenerationErrorType, StreamPhase } from "../../types/generation";
+import {
+  consumeEditorSeed,
+  consumeSelectedClip,
+  type EditorSeed,
+} from "../../lib/clipping/clip-transfer";
+import type { Clip } from "../../lib/clipping/types";
+import { CheckCircle2 } from "lucide-react";
 
 const MAX_CORRECTION_ATTEMPTS = 3;
 
@@ -30,10 +37,22 @@ function GeneratePageContent() {
   // so syntax highlighting is disabled from the beginning
   const willAutoStart = Boolean(initialPrompt);
 
-  const [durationInFrames, setDurationInFrames] = useState(
-    examples[0]?.durationInFrames || 150,
+  // "Editar no Studio" seed: when a clip is sent from /studio/clips, a
+  // prebuilt base composition (code/duration/fps) + the selected Clip are
+  // stashed in sessionStorage. Read once on mount and clear them. This is
+  // additive — when no seed is present (normal /generate use), behavior is
+  // identical to before.
+  const [initialSeed] = useState<EditorSeed | null>(() =>
+    typeof window !== "undefined" ? consumeEditorSeed() : null,
   );
-  const [fps, setFps] = useState(examples[0]?.fps || 30);
+  const [selectedClip] = useState<Clip | null>(() =>
+    typeof window !== "undefined" ? consumeSelectedClip() : null,
+  );
+
+  const [durationInFrames, setDurationInFrames] = useState(
+    initialSeed?.durationInFrames ?? examples[0]?.durationInFrames ?? 150,
+  );
+  const [fps, setFps] = useState(initialSeed?.fps ?? examples[0]?.fps ?? 30);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [isStreaming, setIsStreaming] = useState(willAutoStart);
   const [streamPhase, setStreamPhase] = useState<StreamPhase>(
@@ -41,7 +60,9 @@ function GeneratePageContent() {
   );
   const [prompt, setPrompt] = useState(initialPrompt);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
-  const [hasGeneratedOnce, setHasGeneratedOnce] = useState(false);
+  const [hasGeneratedOnce, setHasGeneratedOnce] = useState(
+    Boolean(initialSeed),
+  );
   const [generationError, setGenerationError] = useState<{
     message: string;
     type: GenerationErrorType;
@@ -79,7 +100,7 @@ function GeneratePageContent() {
     isCompiling,
     setCode,
     compileCode,
-  } = useAnimationState(examples[0]?.code || "");
+  } = useAnimationState(initialSeed?.code ?? examples[0]?.code ?? "");
 
   // Runtime errors from the Player (e.g., "cannot access variable before initialization")
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
@@ -251,7 +272,22 @@ function GeneratePageContent() {
   }, [initialPrompt, hasAutoStarted]);
 
   return (
-    <PageLayout showLogoAsLink>
+    <PageLayout
+      showLogoAsLink
+      rightContent={
+        selectedClip ? (
+          <div className="flex items-center gap-2 rounded-md border border-border bg-background-elevated px-3 py-1.5 text-xs text-muted-foreground">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span>
+              Clip carregado:{" "}
+              <span className="text-foreground font-medium">
+                {selectedClip.title}
+              </span>
+            </span>
+          </div>
+        ) : undefined
+      }
+    >
       <div className="flex-1 flex flex-col min-[1000px]:flex-row min-w-0 overflow-hidden">
         {/* Chat History Sidebar */}
         <ChatSidebar
