@@ -63,14 +63,14 @@ describe("normalizeShorts", () => {
     expect(clips[0].startTime).toBe(0);
     expect(clips[0].endTime).toBe(0);
     expect(clips[0].duration).toBe(0);
-    expect(clips[0].viralScore).toBe(0);
+    expect(clips[0].viralScore).toBeNull(); // no score field → null (not a fabricated 0)
     expect(clips[0].clipUrl).toBe("");
     expect(clips[0].transcript).toBeUndefined();
     expect(clips[0].thumbnailUrl).toBeUndefined();
 
     // Second short: title fallback uses index 2, score fallback for bad string.
     expect(clips[1].title).toBe("Corte 2");
-    expect(clips[1].viralScore).toBe(0);
+    expect(clips[1].viralScore).toBe(0); // present-but-invalid → 0
   });
 
   it("clamps and rounds scores to 0–100", () => {
@@ -100,6 +100,9 @@ describe("normalizeShorts", () => {
   });
 
   it("reads from generic outputs[] (array of URL strings)", () => {
+    // This is the REAL ai-clipping shape: outputs is a flat array of MP4
+    // URL strings — no shorts, no score, no times, no metadata. The UI must
+    // get clipUrl and degrade the rest honestly (null score, fallback title).
     const result: MuApiResultResponse = {
       status: "completed",
       outputs: ["https://cdn.example.com/a.mp4", "https://cdn.example.com/b.mp4"],
@@ -107,6 +110,8 @@ describe("normalizeShorts", () => {
     const clips = normalizeShorts(result, JOB);
     expect(clips).toHaveLength(2);
     expect(clips[0].clipUrl).toBe("https://cdn.example.com/a.mp4");
+    expect(clips[0].viralScore).toBeNull();
+    expect(clips[0].title).toBe("Corte 1");
     expect(clips[1].clipUrl).toBe("https://cdn.example.com/b.mp4");
   });
 

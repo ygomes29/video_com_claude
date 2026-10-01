@@ -1,7 +1,7 @@
 "use client";
 
 interface ClipScoreProps {
-  score: number;
+  score: number | null;
   label?: string;
 }
 
@@ -16,8 +16,25 @@ function band(score: number): { className: string; text: string } {
   return { className: "bg-red-500/15 text-red-400 border-red-500/30", text: "Baixo" };
 }
 
-/** Viral score badge. */
+/**
+ * Viral score badge. Renders a neutral "—" when no score is available
+ * (score === null) — never fabricates a "0 Baixo" rating the provider
+ * did not return.
+ */
 export function ClipScore({ score, label = "Viral" }: ClipScoreProps) {
+  if (score == null) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center rounded-lg border border-border bg-background px-3 py-1.5"
+        title="Score não disponibilizado pelo provedor."
+      >
+        <span className="text-lg font-bold leading-none text-muted-foreground-dim">—</span>
+        <span className="text-[10px] uppercase tracking-wide opacity-70 mt-0.5">
+          {label}
+        </span>
+      </div>
+    );
+  }
   const b = band(score);
   return (
     <div

@@ -29,6 +29,10 @@ function formatDuration(seconds: number): string {
 
 /** A single clip result card. */
 export function ClipCard({ clip, index, aspectRatio, onEdit }: ClipCardProps) {
+  // The real ai-clipping endpoint returns only clip URLs — no start/end
+  // times. Hide the timing row entirely when none were provided, instead of
+  // showing a fabricated "00:00 → 00:00".
+  const hasTimings = clip.startTime > 0 || clip.endTime > 0;
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-background-elevated p-4">
       <div className="flex items-start gap-3">
@@ -58,13 +62,15 @@ export function ClipCard({ clip, index, aspectRatio, onEdit }: ClipCardProps) {
               &ldquo;{clip.hook}&rdquo;
             </p>
           )}
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>
-              {formatTime(clip.startTime)} → {formatTime(clip.endTime)}
-            </span>
-            <span className="text-muted-foreground-dim">·</span>
-            <span>{formatDuration(clip.duration)}</span>
-          </div>
+          {hasTimings && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                {formatTime(clip.startTime)} → {formatTime(clip.endTime)}
+              </span>
+              <span className="text-muted-foreground-dim">·</span>
+              <span>{formatDuration(clip.duration)}</span>
+            </div>
+          )}
           {clip.viralityReason && (
             <p className="text-xs text-muted-foreground-dim line-clamp-3">
               <span className="text-muted-foreground">Motivo: </span>

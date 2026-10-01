@@ -59,6 +59,11 @@ function normalizeShort(
   const endTime = asNumber(raw.end_time, startTime);
   const duration = Math.max(0, endTime - startTime);
   const clipUrl = firstString(raw.clip_url, raw.url);
+  // Score is null when the provider returns none (the real ai-clipping
+  // endpoint only yields clip URLs in `outputs` — no score). A present-but-
+  // invalid value (e.g. "not-a-number") still falls back to 0.
+  const viralScore =
+    raw.score == null ? null : clampScore(asNumber(raw.score, 0));
   return {
     id: makeClipId(jobId, index),
     title: firstString(raw.title, raw.hook_sentence, raw.hook) || `Corte ${index + 1}`,
@@ -67,7 +72,7 @@ function normalizeShort(
     endTime,
     duration,
     transcript: asString(raw.transcript) || undefined,
-    viralScore: clampScore(asNumber(raw.score, 0)),
+    viralScore,
     iafitScore: null,
     viralityReason: firstString(raw.virality_reason, raw.reason),
     categories: [],

@@ -41,8 +41,8 @@ export interface Clip {
   /** endTime - startTime, in seconds. */
   duration: number;
   transcript?: string;
-  /** Viral potential score, sourced directly from MuAPI in V1. */
-  viralScore: number;
+  /** Viral potential score 0–100, or null when the provider returns none. */
+  viralScore: number | null;
   /** IAFIT relevance score. NOT computed in V1 (kept null). */
   iafitScore?: number | null;
   /** Human-readable reason the clip was selected (MuAPI virality_reason). */
