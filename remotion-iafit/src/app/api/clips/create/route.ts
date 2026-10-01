@@ -1,10 +1,11 @@
+import { NextResponse } from "next/server";
 import { z } from "zod";
-import { executeApi } from "../../../../helpers/api-response";
 import { submitClipJob } from "../../../../lib/clipping/muapi-client";
+import { clipErrorResponse } from "../../../../lib/clipping/route-helpers";
 import { normalizeClipStatus } from "../../../../lib/clipping/polling";
 import type { CreateClipResponse } from "../../../../lib/clipping/types";
 
-const CreateClipSchema = z.object({
+export const CreateClipSchema = z.object({
   videoUrl: z
     .string()
     .trim()
@@ -19,24 +20,45 @@ const CreateClipSchema = z.object({
 
 /**
  * POST /api/clips/create
- * Stateless: validates input, submits to MuAPI, returns the MuAPI
- * request_id as `jobId`. The client polls /api/clips/status with it.
+ * Stateless: validates input (400 on bad input), submits to MuAPI, returns
+ * the MuAPI request_id as `jobId`. The client polls /api/clips/status with it.
+ *
+ * Status codes:
+ *   400 — invalid input (bad URL, numHighlights out of range, bad aspectRatio)
+ *   503 — MUAPI_API_KEY not configured
+ *   502 — upstream MuAPI failure
+ *   500 — unexpected internal error
  */
-export const POST = executeApi<CreateClipResponse, typeof CreateClipSchema>(
-  CreateClipSchema,
-  async (_req, body) => {
+export async function POST(req: Request) {
+  let payload: unknown;
+  try {
+    payload = await req.json();
+  } catch {
+    return NextResponse.json(
+      { type: "error", message: "Corpo da requisição inválido (JSON esperado)." },
+      { status: 400 },
+    );
+  }
+
+  const parsed = CreateClipSchema.safeParse(payload);
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? "Entrada inválida.";
+    return NextResponse.json({ type: "error", message }, { status: 400 });
+  }
+
+  try {
     const submission = await submitClipJob({
-      videoUrl: body.videoUrl,
-      numHighlights: body.numHighlights,
-      aspectRatio: body.aspectRatio,
-      returnCoordinatesOnly: body.returnCoordinatesOnly,
+      videoUrl: parsed.data.videoUrl,
+      numHighlights: parsed.data.numHighlights,
+      aspectRatio: parsed.data.aspectRatio,
+      returnCoordinatesOnly: parsed.data.returnCoordinatesOnly,
     });
-    return {
+    const data: CreateClipResponse = {
       jobId: submission.request_id,
       status: normalizeClipStatus(submission.status ?? "queued"),
     };
-  },
-);
-
-/** Re-exported for tests / schema introspection. */
-export { CreateClipSchema };
+    return NextResponse.json({ type: "success", data });
+  } catch (err) {
+    return clipErrorResponse(err);
+  }
+}

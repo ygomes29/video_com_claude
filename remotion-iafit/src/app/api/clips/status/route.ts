@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getJobResult } from "../../../../lib/clipping/muapi-client";
+import { clipErrorResponse } from "../../../../lib/clipping/route-helpers";
 import {
   normalizeClipStatus,
   statusToStageLabel,
@@ -43,9 +44,6 @@ export async function GET(req: Request) {
     };
     return NextResponse.json({ type: "success", data: payload });
   } catch (err) {
-    return NextResponse.json(
-      { type: "error", message: (err as Error).message },
-      { status: 500 },
-    );
+    return clipErrorResponse(err);
   }
 }
