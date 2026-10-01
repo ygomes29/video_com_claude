@@ -198,5 +198,74 @@ describe("muapi-client", () => {
     it("throws when jobId is empty", async () => {
       await expect(getJobResult("")).rejects.toThrow(MuApiError);
     });
+
+    // Case: MuAPI signals a FAILED job via HTTP 400 + {"detail":{status,error}}.
+    // Must surface as a failed result (not throw a generic 502).
+    it("returns a failed result when MuAPI returns 400 with a detail envelope", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(async () =>
+          jsonResponse(
+            {
+              detail: {
+                id: "rid_abc",
+                status: "failed",
+                error: "Download failed: 403 Forbidden for url: https://x/y.mp4",
+              },
+            },
+            400,
+          ),
+        ),
+      );
+      const result = await getJobResult("rid_abc");
+      expect(result.status).toBe("failed");
+      expect(result.error).toMatch(/Download failed/);
+      expect(await getJobStatus("rid_abc")).toBe("failed");
+    });
+
+    it("still throws on a 400 WITHOUT a detail.status (genuine upstream error)", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(async () =>
+          jsonResponse({ detail: "Not found" }, 400),
+        ),
+      );
+      await expect(getJobResult("rid_abc")).rejects.toThrow(MuApiError);
+    });
+  });
+
+  describe("assertOk message extraction (detail envelope)", () => {
+    it("extracts detail.error from a 4xx response", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(async () =>
+          jsonResponse({ detail: { error: "video too long" } }, 400),
+        ),
+      );
+      await expect(submitClipJob(VALID_PARAMS)).rejects.toThrow("video too long");
+    });
+
+    it("extracts a string detail from a 4xx response", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(async () =>
+          jsonResponse({ detail: "bad request" }, 400),
+        ),
+      );
+      await expect(submitClipJob(VALID_PARAMS)).rejects.toThrow("bad request");
+    });
+
+    it("extracts msg from a FastAPI 422 validation array", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(async () =>
+          jsonResponse(
+            { detail: [{ msg: "field required", type: "missing" }] },
+            422,
+          ),
+        ),
+      );
+      await expect(submitClipJob(VALID_PARAMS)).rejects.toThrow("field required");
+    });
   });
 });

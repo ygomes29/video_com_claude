@@ -100,11 +100,51 @@ function sleep(ms: number): Promise<void> {
 
 function assertOk(res: Response, body: unknown): void {
   if (res.ok) return;
-  const message =
-    typeof body === "object" && body !== null && "message" in body
-      ? String((body as { message: unknown }).message)
-      : `MuAPI request failed with HTTP ${res.status}`;
+  const message = extractErrorMessage(body) ?? `MuAPI request failed with HTTP ${res.status}`;
   throw new MuApiError(message, { status: res.status, body });
+}
+
+/**
+ * Extract a human-readable error message from a MuAPI error body.
+ *
+ * MuAPI does not use a single error shape — be permissive:
+ *   { "message": "..." }
+ *   { "detail": "string" }                       (FastAPI default)
+ *   { "detail": { "error": "..." } }             (failed job result)
+ *   { "detail": [{ "msg": "..." }] }             (FastAPI validation 422)
+ */
+function extractErrorMessage(body: unknown): string | null {
+  if (!body || typeof body !== "object") return null;
+  const b = body as Record<string, unknown>;
+  if (typeof b.message === "string" && b.message) return b.message;
+  const detail = b.detail;
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    const first = detail[0];
+    if (first && typeof first === "object" && typeof (first as { msg?: unknown }).msg === "string") {
+      return (first as { msg: string }).msg;
+    }
+  }
+  if (detail && typeof detail === "object") {
+    const d = detail as Record<string, unknown>;
+    if (typeof d.error === "string" && d.error) return d.error;
+    if (typeof d.message === "string" && d.message) return d.message;
+  }
+  return null;
+}
+
+/**
+ * If a non-OK result response carries a `detail` object with a `status`,
+ * it represents a terminal (failed/cancelled) job — not a transport error.
+ * Return it as a result so the caller can surface the real status + reason.
+ */
+function detailAsResult(body: unknown): MuApiResultResponse | null {
+  if (!body || typeof body !== "object") return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (detail && typeof detail === "object" && "status" in detail) {
+    return detail as MuApiResultResponse;
+  }
+  return null;
 }
 
 /* ----------------------------- raw types ----------------------------- */
@@ -187,6 +227,12 @@ export async function submitClipJob(
   return body;
 }
 
+/** Convenience: just the normalized status for a job. */
+export async function getJobStatus(requestId: string): Promise<ClipStatus> {
+  const result = await getJobResult(requestId);
+  return normalizeClipStatus(result.status);
+}
+
 /** Fetch the raw result object for a job. Works for both status + result. */
 export async function getJobResult(
   requestId: string,
@@ -194,13 +240,14 @@ export async function getJobResult(
   if (!requestId) throw new MuApiError("Missing jobId (request_id).");
   const url = `${getBaseUrl()}/predictions/${encodeURIComponent(requestId)}/result`;
   const res = await fetchWithRetry(url, { method: "GET", headers: authHeaders() });
-  const body = (await parseJson(res)) as MuApiResultResponse | null;
-  assertOk(res, body);
-  return body ?? {};
-}
-
-/** Convenience: just the normalized status for a job. */
-export async function getJobStatus(requestId: string): Promise<ClipStatus> {
-  const result = await getJobResult(requestId);
-  return normalizeClipStatus(result.status);
+  const body = await parseJson(res);
+  if (!res.ok) {
+    // MuAPI signals a failed/cancelled job with HTTP 400 + a `detail` object
+    // carrying the real status + error. Surface it as a result so the UI can
+    // show the terminal state + reason instead of a generic 502.
+    const failed = detailAsResult(body);
+    if (failed) return failed;
+    assertOk(res, body); // genuine upstream error → 502
+  }
+  return (body as MuApiResultResponse) ?? {};
 }
