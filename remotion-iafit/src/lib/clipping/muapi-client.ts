@@ -3,7 +3,14 @@
  *
  * SERVER-ONLY. Never import this from a client component — it reads
  * MUAPI_API_KEY from the environment and must never reach the browser.
- *
+ */
+
+import "server-only";
+
+import type { AspectRatio, ClipStatus } from "./types";
+import { normalizeClipStatus } from "./polling";
+
+/**
  * This module is intentionally thin: it only speaks the raw MuAPI schema.
  * Domain normalization (raw → Clip[]) lives in `highlights.ts`.
  *
@@ -12,9 +19,6 @@
  *   GET  {BASE}/predictions/{request_id}/result   → { id, status, outputs, ... }
  *   statuses: queued | pending | processing | completed | failed | cancelled
  */
-
-import type { AspectRatio, ClipStatus } from "./types";
-import { normalizeClipStatus } from "./polling";
 
 /** Default base URL; override with MUAPI_BASE_URL if needed. */
 const DEFAULT_BASE_URL = "https://api.muapi.ai/api/v1";
