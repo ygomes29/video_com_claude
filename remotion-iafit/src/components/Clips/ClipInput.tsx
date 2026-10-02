@@ -54,10 +54,15 @@ export function ClipInput({ onAnalyze, isLoading }: ClipInputProps) {
           value={videoUrl}
           onChange={(e) => setVideoUrl(e.target.value)}
           onBlur={() => setTouched(true)}
-          placeholder="https://youtube.com/... ou URL direta do vídeo"
+          placeholder="https://exemplo.com/video.mp4"
           disabled={isLoading}
           className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground-dim focus:outline-none focus:border-primary"
         />
+        <span className="text-xs text-muted-foreground-dim">
+          Cole a URL direta de um arquivo de vídeo (ex.: <code>.mp4</code>).
+          Links do YouTube/Vimeo não funcionam — a MuAPI precisa baixar o
+          arquivo de vídeo direto.
+        </span>
         {showError && (
           <span className="text-xs text-destructive">
             Informe uma URL válida (http/https).
@@ -105,9 +110,12 @@ export function ClipInput({ onAnalyze, isLoading }: ClipInputProps) {
       </div>
 
       <div className="flex items-center justify-between gap-3 pt-1">
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground-dim">
+        <span
+          className="flex items-center gap-1.5 text-xs text-muted-foreground-dim opacity-60 cursor-not-allowed select-none"
+          title="Upload de arquivo não disponível nesta versão."
+        >
           <Upload className="w-3.5 h-3.5" />
-          Upload — em breve
+          Upload — indisponível nesta versão
         </span>
         <Button type="submit" loading={isLoading} disabled={isLoading}>
           Analisar Vídeo
