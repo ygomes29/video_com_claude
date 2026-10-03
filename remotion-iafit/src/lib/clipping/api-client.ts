@@ -65,3 +65,60 @@ export async function getClipResults(
   );
   return unwrap<ClipResultsResponse>(res);
 }
+
+/** Presigned upload grant returned by /api/clips/upload-url. */
+export interface UploadUrlGrant {
+  key: string;
+  uploadUrl: string;
+  videoUrl: string;
+}
+
+/**
+ * Ask the server for presigned S3 URLs to upload a local file. Returns the
+ * PUT URL (browser → S3) and the GET URL (time-limited, used as the video
+ * URL fed to /api/clips/create).
+ */
+export async function requestUploadUrl(input: {
+  contentType: string;
+  size: number;
+}): Promise<UploadUrlGrant> {
+  const res = await fetch("/api/clips/upload-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return unwrap<UploadUrlGrant>(res);
+}
+
+/**
+ * Upload a File directly to S3 via a presigned PUT URL, reporting progress
+ * as a 0..1 fraction. Uses XHR because fetch has no upload-progress event.
+ * Rejects with ClipsApiError on any non-2xx response or network failure.
+ */
+export function uploadFileToS3(
+  file: File,
+  uploadUrl: string,
+  onProgress?: (fraction: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl, true);
+    xhr.setRequestHeader(
+      "Content-Type",
+      file.type || "application/octet-stream",
+    );
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(e.loaded / e.total);
+      };
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new ClipsApiError(`Upload falhou (HTTP ${xhr.status}).`));
+    };
+    xhr.onerror = () =>
+      reject(new ClipsApiError("Erro de rede no upload para o S3."));
+    xhr.onabort = () => reject(new ClipsApiError("Upload cancelado."));
+    xhr.send(file);
+  });
+}
