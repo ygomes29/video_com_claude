@@ -79,12 +79,19 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
   throw lastErr;
 }
 
+interface DeepgramWord {
+  word?: string;
+  punctuated_word?: string;
+  start?: number;
+  end?: number;
+}
+
 interface DeepgramUtterance {
   start?: number;
   end?: number;
   transcript?: string;
   speaker?: number;
-  words?: unknown[];
+  words?: DeepgramWord[];
 }
 
 interface DeepgramResult {
@@ -102,8 +109,30 @@ function segmentId(index: number): string {
 }
 
 /**
+ * Source language for transcription. Defaults to pt-BR (IAFIT is a Brazilian
+ * product); override with DEEPGRAM_LANGUAGE=en (or any Deepgram-supported
+ * locale) for non-PT uploads. Without this, Deepgram assumes en-US and
+ * transcribes Portuguese audio as English gibberish.
+ */
+function resolveLanguage(): string {
+  const lang = process.env.DEEPGRAM_LANGUAGE?.trim();
+  return lang || "pt-BR";
+}
+
+/** Sentence-level segmentation caps (single segments the LLM can combine). */
+const MAX_SENTENCE_SEC = 25;
+const MAX_SENTENCE_WORDS = 40;
+
+function isSentenceEnd(word: string): boolean {
+  return /[.!?…]$/.test(word.trim());
+}
+
+/**
  * Transcribe a video/audio URL via Deepgram's pre-recorded API.
- * Returns segments with stable IDs, verbatim text, and speaker labels.
+ * Returns FINE-GRAINED sentence-level segments with stable IDs, verbatim
+ * text, and speaker labels — so the LLM can pick 20-90s ranges by combining
+ * adjacent ~5-15s segments (instead of being stuck with coarse speaker-turn
+ * utterances of 0.5s or 150s).
  */
 export async function transcribeVideo(videoUrl: string): Promise<TranscriptSegment[]> {
   if (!videoUrl) {
@@ -114,6 +143,7 @@ export async function transcribeVideo(videoUrl: string): Promise<TranscriptSegme
     utterances: "true",
     diarize: "true",
     punctuate: "true",
+    language: resolveLanguage(),
   });
   const res = await fetchWithRetry(`${DEEPGRAM_URL}?${params.toString()}`, {
     method: "POST",
@@ -140,13 +170,95 @@ export async function transcribeVideo(videoUrl: string): Promise<TranscriptSegme
       "Deepgram returned no utterances (empty transcript).",
     );
   }
-  return utterances.map((u, i) => ({
-    id: segmentId(i),
-    start: Number(u.start ?? 0),
-    end: Number(u.end ?? 0),
-    text: (u.transcript ?? "").trim(),
-    speaker: u.speaker !== undefined ? String(u.speaker) : undefined,
-  }));
+  return buildSegments(utterances);
+}
+
+/**
+ * Build sentence-level TranscriptSegments from Deepgram utterances.
+ *
+ * When utterances carry word-level timings (the default with utterances=true),
+ * flatten all words (preserving each word's utterance speaker) and group them
+ * into sentence-sized segments: close a group at sentence-ending punctuation,
+ * at MAX_SENTENCE_SEC, or at MAX_SENTENCE_WORDS. This yields many short,
+ * semantically-coherent segments the LLM can combine into 20-90s clips.
+ *
+ * Fallback: when an utterance has no word timings, emit one segment per
+ * utterance (coarse speaker-turn granularity) so the transcript is never lost.
+ */
+function buildSegments(utterances: DeepgramUtterance[]): TranscriptSegment[] {
+  const hasWords = utterances.some((u) => (u.words?.length ?? 0) > 0);
+  if (!hasWords) {
+    return utterances.map((u, i) => ({
+      id: segmentId(i),
+      start: Number(u.start ?? 0),
+      end: Number(u.end ?? 0),
+      text: (u.transcript ?? "").trim(),
+      speaker: u.speaker !== undefined ? String(u.speaker) : undefined,
+    }));
+  }
+
+  // Flatten words across utterances, carrying the utterance speaker forward.
+  const allWords: Array<{ word: string; start: number; end: number; speaker?: string }> = [];
+  for (const u of utterances) {
+    const speaker = u.speaker !== undefined ? String(u.speaker) : undefined;
+    const ws = u.words ?? [];
+    if (ws.length === 0) {
+      const t = (u.transcript ?? "").trim();
+      if (t) {
+        allWords.push({
+          word: t,
+          start: Number(u.start ?? 0),
+          end: Number(u.end ?? 0),
+          speaker,
+        });
+      }
+      continue;
+    }
+    for (const w of ws) {
+      const word = (w.punctuated_word ?? w.word ?? "").trim();
+      if (!word) continue;
+      allWords.push({
+        word,
+        start: Number(w.start ?? 0),
+        end: Number(w.end ?? 0),
+        speaker,
+      });
+    }
+  }
+
+  const segments: TranscriptSegment[] = [];
+  let cur: { words: string[]; start: number; end: number; speaker?: string } | null = null;
+  const flush = () => {
+    if (!cur || cur.words.length === 0) {
+      cur = null;
+      return;
+    }
+    segments.push({
+      id: segmentId(segments.length),
+      start: cur.start,
+      end: cur.end,
+      text: cur.words.join(" "),
+      speaker: cur.speaker,
+    });
+    cur = null;
+  };
+  for (const w of allWords) {
+    if (!cur) {
+      cur = { words: [], start: w.start, end: w.end, speaker: w.speaker };
+    }
+    cur.words.push(w.word);
+    cur.end = w.end;
+    if (cur.speaker === undefined && w.speaker !== undefined) cur.speaker = w.speaker;
+    if (
+      isSentenceEnd(w.word) ||
+      cur.end - cur.start >= MAX_SENTENCE_SEC ||
+      cur.words.length >= MAX_SENTENCE_WORDS
+    ) {
+      flush();
+    }
+  }
+  flush();
+  return segments;
 }
 
 /**
