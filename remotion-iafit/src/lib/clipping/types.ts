@@ -25,6 +25,17 @@ export type ClipStatus =
   | "failed"
   | "cancelled";
 
+/**
+ * Real pipeline stage for the IAFIT Intelligence runner.
+ * Surfaced to the UI via /api/clips/status `stage` (replaces the old
+ * representational substage cycling).
+ */
+export type ClipJobStage =
+  | "transcrevendo"
+  | "identificando"
+  | "gerando"
+  | "concluido";
+
 /** Aspect ratios supported by the MuAI ai-clipping endpoint. */
 export type AspectRatio = "9:16" | "1:1" | "4:5";
 
@@ -43,10 +54,12 @@ export interface Clip {
   transcript?: string;
   /** Viral potential score 0–100, or null when the provider returns none. */
   viralScore: number | null;
-  /** IAFIT relevance score. NOT computed in V1 (kept null). */
+  /** IAFIT relevance score 0–100 (relevance to gym owners/managers), or null. */
   iafitScore?: number | null;
-  /** Human-readable reason the clip was selected (MuAPI virality_reason). */
+  /** Human-readable reason explaining the viralScore. */
   viralityReason: string;
+  /** Human-readable reason explaining the iafitScore (Intelligence layer). */
+  iafitReason?: string;
   categories?: ClipCategory[];
   /** URL of the rendered vertical clip (MP4). */
   clipUrl: string;

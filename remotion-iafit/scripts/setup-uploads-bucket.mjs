@@ -28,7 +28,11 @@ import { createInterface } from "node:readline/promises";
 dotenv.config({ path: ".env.local" });
 
 const BUCKET = process.env.CLIPS_UPLOAD_BUCKET || "iafit-clips-uploads";
-const REGION = process.env.REMOTION_AWS_REGION || process.env.AWS_REGION || "us-east-1";
+const REGION =
+  process.env.CLIPS_UPLOAD_REGION ||
+  process.env.REMOTION_AWS_REGION ||
+  process.env.AWS_REGION ||
+  "us-east-1";
 // Origins allowed to PUT to S3 from the browser. Add your prod origin here.
 const ORIGINS = ["http://localhost:3001", "http://localhost:3000"];
 

@@ -14,6 +14,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import {
   GetObjectCommand,
   PutObjectCommand,
@@ -67,7 +68,12 @@ function getEnv(name: string): string | undefined {
 }
 
 function resolveRegion(): string {
-  return getEnv("REMOTION_AWS_REGION") ?? getEnv("AWS_REGION") ?? "us-east-1";
+  return (
+    getEnv("CLIPS_UPLOAD_REGION") ??
+    getEnv("REMOTION_AWS_REGION") ??
+    getEnv("AWS_REGION") ??
+    "us-east-1"
+  );
 }
 
 function resolveMaxBytes(): number {
@@ -193,6 +199,53 @@ export async function createUploadRequest(
     throw new UploadError(
       "aws",
       `Falha ao gerar URL de upload: ${(err as Error).message}`,
+    );
+  }
+}
+
+/**
+ * Upload a locally-rendered clip MP4 to the same private bucket and return a
+ * presigned GET URL (time-limited) used as the clip's `clipUrl`.
+ *
+ * Used by the Intelligence render step: `renderMedia` writes to /tmp, this
+ * uploads the file under `clips-output/<uuid>.mp4` and hands back a URL the
+ * browser can play. Reuses the same S3Client / creds / region as uploads.
+ */
+export async function uploadClipOutput(
+  filePath: string,
+  contentType = "video/mp4",
+): Promise<string> {
+  const creds = requireUploadCreds();
+  const client = s3Client(creds);
+  const ext = contentType === "video/quicktime" ? "mov" : "mp4";
+  const key = `clips-output/${randomUUID()}.${ext}`;
+  let body: Buffer;
+  try {
+    body = await readFile(filePath);
+  } catch (err) {
+    throw new UploadError(
+      "aws",
+      `Falha ao ler clip renderizado: ${(err as Error).message}`,
+    );
+  }
+  try {
+    await client.send(
+      new PutObjectCommand({
+        Bucket: creds.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      }),
+    );
+    return await getSignedUrl(
+      client,
+      new GetObjectCommand({ Bucket: creds.bucket, Key: key }),
+      { expiresIn: resolveGetExpiry() },
+    );
+  } catch (err) {
+    throw new UploadError(
+      "aws",
+      `Falha ao enviar clip renderizado ao S3: ${(err as Error).message}`,
     );
   }
 }

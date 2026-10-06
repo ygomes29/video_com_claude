@@ -20,7 +20,7 @@
 set -euo pipefail
 
 BUCKET="${CLIPS_UPLOAD_BUCKET:-iafit-clips-uploads}"
-REGION="${REMOTION_AWS_REGION:-us-east-1}"
+REGION="${CLIPS_UPLOAD_REGION:-${REMOTION_AWS_REGION:-us-east-1}}"
 # Origins allowed to PUT to S3 from the browser. Add your prod origin here.
 ORIGINS=(
   "http://localhost:3001"

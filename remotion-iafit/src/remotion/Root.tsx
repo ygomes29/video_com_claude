@@ -56,11 +56,30 @@ export const RemotionRoot: React.FC = () => {
         fps={30}
         width={1080}
         height={1920}
-        defaultProps={{ clipUrl: "" }}
-        calculateMetadata={({ props }) => ({
-          durationInFrames: (props.durationInFrames as number) ?? 300,
-          fps: (props.fps as number) ?? 30,
-        })}
+        defaultProps={{ videoUrl: "" }}
+        calculateMetadata={({ props }) => {
+          const fps = (props.fps as number) ?? 30;
+          const startSec = (props.startSec as number) ?? 0;
+          const endSec = (props.endSec as number) ?? 0;
+          const ratio = (props.aspectRatio as string) ?? "9:16";
+          const dims =
+            ratio === "1:1"
+              ? { width: 1080, height: 1080 }
+              : ratio === "4:5"
+                ? { width: 1080, height: 1350 }
+                : { width: 1080, height: 1920 };
+          const durationInFrames = Math.max(
+            1,
+            Math.round((endSec - startSec) * fps),
+          );
+          return {
+            ...dims,
+            durationInFrames: Number.isFinite(durationInFrames)
+              ? durationInFrames
+              : 300,
+            fps,
+          };
+        }}
       />
     </>
   );
