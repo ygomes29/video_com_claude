@@ -1,49 +1,49 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getJobResult } from "../../../../lib/clipping/muapi-client";
-import { clipErrorResponse } from "../../../../lib/clipping/route-helpers";
-import {
-  normalizeClipStatus,
-  statusToStageLabel,
-} from "../../../../lib/clipping/polling";
-import type { ClipJobStatus } from "../../../../lib/clipping/types";
+import { getJob } from "../../../../lib/clipping/intelligence/jobs";
+import type { ClipJobStage, ClipJobStatus } from "../../../../lib/clipping/types";
 
 const StatusQuerySchema = z.object({
   jobId: z.string().trim().min(1, "jobId é obrigatório."),
 });
 
+const STAGE_LABELS: Record<ClipJobStage, string> = {
+  transcrevendo: "Transcrevendo...",
+  identificando: "Identificando melhores momentos...",
+  gerando: "Gerando cortes...",
+  concluido: "Concluído",
+};
+
 /**
  * GET /api/clips/status?jobId=...
- * Stateless: queries MuAPI live, returns a normalized status + a
- * representational stage label for the UI.
+ * Reads the in-memory Intelligence job and returns its status + real stage.
+ * Local dogfooding only — jobs do not survive restart (see jobs.ts).
  */
 export async function GET(req: Request) {
-  try {
-    const url = new URL(req.url);
-    const parsed = StatusQuerySchema.safeParse({
-      jobId: url.searchParams.get("jobId"),
-    });
-    if (!parsed.success) {
-      return NextResponse.json(
-        { type: "error", message: parsed.error.issues[0]?.message ?? "jobId inválido." },
-        { status: 400 },
-      );
-    }
-
-    const result = await getJobResult(parsed.data.jobId);
-    const status = normalizeClipStatus(result.status);
-
-    const payload: ClipJobStatus = {
-      jobId: parsed.data.jobId,
-      status,
-      stage: statusToStageLabel(status),
-      message:
-        status === "failed"
-          ? (result.error ?? result.message ?? "O processamento falhou.")
-          : undefined,
-    };
-    return NextResponse.json({ type: "success", data: payload });
-  } catch (err) {
-    return clipErrorResponse(err);
+  const url = new URL(req.url);
+  const parsed = StatusQuerySchema.safeParse({
+    jobId: url.searchParams.get("jobId"),
+  });
+  if (!parsed.success) {
+    return NextResponse.json(
+      { type: "error", message: parsed.error.issues[0]?.message ?? "jobId inválido." },
+      { status: 400 },
+    );
   }
+
+  const job = getJob(parsed.data.jobId);
+  if (!job) {
+    return NextResponse.json(
+      { type: "error", message: "Job não encontrado." },
+      { status: 404 },
+    );
+  }
+
+  const payload: ClipJobStatus = {
+    jobId: job.id,
+    status: job.status,
+    stage: STAGE_LABELS[job.stage],
+    message: job.message,
+  };
+  return NextResponse.json({ type: "success", data: payload });
 }

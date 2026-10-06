@@ -12,8 +12,13 @@ import type { ClipStatus } from "./types";
 /** Client polling cadence (ms). MuAPI jobs take seconds-to-minutes. */
 export const POLL_INTERVAL_MS = 3000;
 
-/** Hard client-side polling deadline (ms). ~10 minutes. */
-export const POLL_TIMEOUT_MS = 10 * 60 * 1000;
+/**
+ * Hard client-side polling deadline (ms). The Intelligence pipeline can take a
+ * long time for large uploads: the source download to /tmp alone may run tens
+ * of minutes on a slow link, before Remotion render + S3 upload. Set generously
+ * (~2 hours) so the browser does not give up while the backend is still working.
+ */
+export const POLL_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 /** Terminal statuses — stop polling once reached. */
 export const TERMINAL_STATUSES: ReadonlySet<ClipStatus> = new Set<ClipStatus>([
